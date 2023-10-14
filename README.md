@@ -31,9 +31,13 @@ A process should look like:
 
 ### Curl commands
 
-- `curl -X POST http://localhost:8080/acquire_process_list` (or `curl -Method POST http://localhost:8080/acquire_process_list` on windows if `curl` is an alias to `Invoke-WebRequest`)
+- `curl -X POST http://localhost:8080/acquire_process_list` 
+
+(or `curl -Method POST http://localhost:8080/acquire_process_list` on windows if `curl` is an alias to `Invoke-WebRequest`)
 - `curl http://localhost:8080/processes`
-- `curl -G -d 'pid=<num>' -d 'username=<str>' http://localhost:8080/search` (or `curl -Body @{pid=<num>;username="<str>"} http://localhost:8080/search` on windows with `Invoke-WebRequest`)
+- `curl -G -d 'pid=<num>' -d 'username=<str>' http://localhost:8080/search` 
+
+(or `curl -Body @{pid=<num>;username="<str>"} http://localhost:8080/search` on windows with `Invoke-WebRequest`)
 - `curl http://localhost:8080/data`
 
 ## Dependencies
