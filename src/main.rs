@@ -32,7 +32,7 @@ async fn main() {
         .with_max_level(tracing::Level::DEBUG)
         .init();
 
-    let (tx, rx) = tokio::sync::broadcast::channel(10);
+    let (tx, rx) = tokio::sync::broadcast::channel(100);
 
     let app = Router::new()
         .route(
