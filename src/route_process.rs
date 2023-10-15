@@ -63,8 +63,6 @@ pub async fn acquire_process_list(app_state: Arc<AppState>) -> Result<impl Reply
 }
 
 pub async fn processes(app_state: Arc<AppState>) -> Result<impl Reply, Infallible> {
-    // let process_list = app_state.get_process_list().await;
-
     Ok(json(app_state.process_list.lock().await.deref()))
 }
 
