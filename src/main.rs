@@ -2,12 +2,11 @@ mod process_data;
 mod route_process;
 
 use crate::process_data::ProcessData;
-use axum::routing::{get, post};
-use axum::Router;
-use std::net::SocketAddr;
+use crate::route_process::SearchParams;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::Mutex;
+use warp::Filter;
 
 #[derive(Debug)]
 pub struct AppState {
@@ -34,24 +33,39 @@ async fn main() {
 
     let (tx, rx) = tokio::sync::broadcast::channel(100);
 
-    let app = Router::new()
-        .route(
-            "/acquire_process_list",
-            post(route_process::acquire_process_list),
-        )
-        .route("/processes", get(route_process::processes))
-        .route("/search", get(route_process::search))
-        .route("/data", get(route_process::data))
-        .with_state(Arc::new(AppState {
-            process_list: Default::default(),
-            tx_sse: tx,
-            rx_sse: rx,
-        }));
+    let app_state = Arc::new(AppState {
+        process_list: Default::default(),
+        tx_sse: tx,
+        rx_sse: rx,
+    });
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-    tracing::debug!("listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let acquire_process_list = warp::path("acquire_process_list")
+        .and(warp::post())
+        .and_then({
+            // A bit ugly, maybe there exist a more elegant solution
+            let state = app_state.clone();
+            move || route_process::acquire_process_list(state.clone())
+        });
+
+    let processes = warp::path("processes").and(warp::get()).and_then({
+        let state = app_state.clone();
+        move || route_process::processes(state.clone())
+    });
+
+    let search = warp::path("search")
+        .and(warp::get())
+        .and(warp::query::<SearchParams>())
+        .and_then({
+            let state = app_state.clone();
+            move |params| route_process::search(state.clone(), params)
+        });
+
+    let data = warp::path("data").and(warp::get()).map({
+        let state = app_state.clone();
+        move || warp::sse::reply(warp::sse::keep_alive().stream(route_process::data(state.clone())))
+    });
+
+    warp::serve(acquire_process_list.or(processes).or(search).or(data))
+        .run(([127, 0, 0, 1], 8080))
+        .await;
 }

@@ -1,16 +1,16 @@
 use crate::process_data::ProcessData;
 use crate::AppState;
-use axum::extract::{Query, State};
-use axum::http::StatusCode;
-use axum::response::sse::{Event, KeepAlive};
-use axum::response::{IntoResponse, Sse};
-use axum::Json;
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{Stream, TryStreamExt};
 use serde::Deserialize;
+use std::convert::Infallible;
+use std::ops::Deref;
 use std::sync::Arc;
 use sysinfo::{PidExt, ProcessExt, ProcessRefreshKind, RefreshKind, SystemExt, UserExt};
-use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt;
+use warp::reply::json;
+use warp::sse::Event;
+use warp::Reply;
 
 fn get_process_list() -> Vec<ProcessData> {
     let mut system = sysinfo::System::new_with_specifics(
@@ -42,7 +42,7 @@ fn get_process_list() -> Vec<ProcessData> {
         .collect()
 }
 
-pub async fn acquire_process_list(State(app_state): State<Arc<AppState>>) -> impl IntoResponse {
+pub async fn acquire_process_list(app_state: Arc<AppState>) -> Result<impl Reply, Infallible> {
     let old_process_list = app_state.get_process_list().await;
 
     let new_process_list = get_process_list();
@@ -59,12 +59,13 @@ pub async fn acquire_process_list(State(app_state): State<Arc<AppState>>) -> imp
 
     app_state.set_process_list(new_process_list).await;
 
-    StatusCode::OK
+    Ok(warp::http::StatusCode::OK)
 }
 
-pub async fn processes(State(app_state): State<Arc<AppState>>) -> impl IntoResponse {
-    let process_list = app_state.get_process_list().await;
-    Json(process_list)
+pub async fn processes(app_state: Arc<AppState>) -> Result<impl Reply, Infallible> {
+    // let process_list = app_state.get_process_list().await;
+
+    Ok(json(app_state.process_list.lock().await.deref()))
 }
 
 #[derive(Debug, Deserialize)]
@@ -74,9 +75,9 @@ pub struct SearchParams {
 }
 
 pub async fn search(
-    State(app_state): State<Arc<AppState>>,
-    Query(params): Query<SearchParams>,
-) -> impl IntoResponse {
+    app_state: Arc<AppState>,
+    params: SearchParams,
+) -> Result<impl Reply, Infallible> {
     let mut process_list = app_state.get_process_list().await;
 
     if let Some(pid) = params.pid {
@@ -87,15 +88,12 @@ pub async fn search(
         process_list.retain(|p| p.username == username);
     }
 
-    Json(process_list)
+    Ok(json(&process_list))
 }
 
-pub async fn data(
-    State(app_state): State<Arc<AppState>>,
-) -> Sse<impl Stream<Item = Result<Event, BroadcastStreamRecvError>>> {
-    let stream = BroadcastStream::new(app_state.rx_sse.resubscribe())
+pub fn data(app_state: Arc<AppState>) -> impl Stream<Item = Result<Event, Infallible>> {
+    BroadcastStream::new(app_state.rx_sse.resubscribe())
         .into_stream()
-        .map(|r| r.map(|p| Event::default().json_data(p).unwrap_or_default())); // Should change this unwrap (maybe by using the anyhow crate)
-
-    Sse::new(stream).keep_alive(KeepAlive::default())
+        .filter_map(|r| r.ok())
+        .map(|p| Ok(Event::default().json_data(p).unwrap_or_default())) // Should change this unwrap (maybe by using the anyhow crate)
 }

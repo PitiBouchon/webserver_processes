@@ -43,9 +43,9 @@ A process should look like:
 ## Dependencies
 
 - **sysinfo**: used to get the list of processes running
-- **axum**: the webserver framework
-- tokio: the async runtime needed with axum
-- tracing / tracing-subscriber: tracing with axum
+- **warp**: the webserver framework
+- tokio: the async runtime needed with warp
+- tracing / tracing-subscriber: tracing with warp
 - tokio-stream: used only for streaming the receiver of the broadcast (see also [Receiver](https://docs.rs/tokio/latest/tokio/sync/broadcast/struct.Receiver.html))
 - futures: for the streaming traits
 - serde: serialize / deserialize derive traits for the json format
